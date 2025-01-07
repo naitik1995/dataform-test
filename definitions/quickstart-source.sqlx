@@ -1,5 +1,5 @@
 config {
-  type: "view"
+    type: "view"
 }
 
 SELECT
@@ -17,3 +17,7 @@ UNION ALL
 SELECT
   "bananas" AS fruit,
   0 AS count
+UNION ALL
+SELECT
+  "pears" AS fruit,
+  100 AS count
