@@ -1,0 +1,40 @@
+config {
+  type: "operations",
+  description: "Decimal Places in Currencies",
+}
+
+MERGE `naitik-poc-test.CDC_SAP_V_6_0.tcurx` AS T
+USING (
+  WITH
+    -- All the rows that arrived in raw table after the latest CDC table refresh.
+    NewRawRecords AS (
+      SELECT * FROM `naitik-poc-test.RAW_SAP_V_6_0.tcurx`
+      WHERE recordstamp >= (
+        SELECT IFNULL(MAX(recordstamp), TIMESTAMP('1940-12-25 05:30:00+00'))
+        FROM `naitik-poc-test.CDC_SAP_V_6_0.tcurx`)
+      AND `CURRKEY` IS NOT NULL
+    )
+    -- For each unique record (by primary key), find chronologically latest row. This ensures CDC
+    -- table only contains one entry for a unique record.
+    -- This also handles the conditions where SLT connector may have introduced true duplicate
+    -- rows (same recordstamp).
+    SELECT *
+    FROM NewRawRecords
+    QUALIFY
+      ROW_NUMBER() OVER (
+        PARTITION BY CURRKEY
+        ORDER BY
+          recordstamp DESC,
+          IF(operation_flag = 'D', 'ZZ', operation_flag) DESC -- Prioritize "D" flag within the dups.
+      ) = 1
+  ) AS S
+ON T.`CURRKEY` = S.`CURRKEY`
+-- ## CORTEX-CUSTOMER You can use "is_deleted = true" condition along with "operation_flag = 'D'",
+-- if that is applicable to your CDC set up.
+WHEN NOT MATCHED AND IFNULL(S.operation_flag, 'I') != 'D' THEN
+  INSERT (`currkey`, `currdec`, `recordstamp`)
+  VALUES (`currkey`, `currdec`, `recordstamp`)
+WHEN MATCHED AND S.operation_flag = 'D' THEN
+  DELETE
+WHEN MATCHED AND S.operation_flag IN ('I','U') THEN
+  UPDATE SET T.`currkey` = S.`currkey`, T.`currdec` = S.`currdec`, T.`recordstamp` = S.`recordstamp`;

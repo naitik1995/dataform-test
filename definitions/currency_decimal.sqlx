@@ -1,0 +1,11 @@
+config {
+    type: "table",
+    description: "Currency decimal helper function",
+    dependencies: ["tcurx"]
+}
+
+SELECT
+  DISTINCT tcurx.CURRKEY,
+  CAST(POWER(10, 2 - COALESCE(tcurx.CURRDEC, 0)) AS NUMERIC) AS CURRFIX
+FROM
+  `naitik-poc-test.CDC_SAP_V_6_0.tcurx` AS tcurx

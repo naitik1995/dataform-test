@@ -1,5 +1,5 @@
 defaultProject: naitik-poc-test
 defaultLocation: US
-defaultDataset: dataform
-defaultAssertionDataset: dataform_assertions
+defaultDataset: REPORTING_SAP_V_6_0
+defaultAssertionDataset: REPORTING_SAP_V_6_0
 dataformCoreVersion: 3.0.0

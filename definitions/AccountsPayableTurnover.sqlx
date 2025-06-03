@@ -1,0 +1,247 @@
+config {
+    type: "table",
+    description: "Currency decimal helper function",
+    dependencies: ["AccountsPayable"]
+}
+
+BEGIN
+    BEGIN TRANSACTION;
+
+    TRUNCATE TABLE `naitik-poc-test.REPORTING_SAP_V_6_0.AccountsPayableTurnover`;
+
+    INSERT INTO `naitik-poc-test.REPORTING_SAP_V_6_0.AccountsPayableTurnover`
+    (
+                `Client_MANDT`,
+        `CompanyCode_BUKRS`,
+        `CompanyText_BUTXT`,
+        `AccountNumberOfVendorOrCreditor_LIFNR`,
+        `NAME1`,
+        `AccountingDocumentNumber_BELNR`,
+        `NumberOfLineItemWithinAccountingDocument_BUZEI`,
+        `PostingDateInTheDocument_BUDAT`,
+        `AccountingDocumenttype_BLART`,
+        `AmountInLocalCurrency_DMBTR`,
+        `AmountInTargetCurrency_DMBTR`,
+        `CurrencyKey_WAERS`,
+        `TargetCurrency_TCURR`,
+        `DocFiscPeriod`,
+        `TotalPurchasesInSourceCurrency`,
+        `TotalPurchasesInTargetCurrency`,
+        `OpeningAPInSourceCurrency`,
+        `OpeningAPInTargetCurrency`,
+        `PeriodAPInSourceCurrency`,
+        `PeriodAPInTargetCurrency`,
+        `ClosingAPInSourceCurrency`,
+        `ClosingAPInTargetCurrency`,
+        `AccountsPayableTurnoverInSourceCurrency`,
+        `AccountsPayableTurnoverInTargetCurrency`
+    )
+        #-- Copyright 2022 Google LLC
+    #--
+    #-- Licensed under the Apache License, Version 2.0 (the "License");
+    #-- you may not use this file except in compliance with the License.
+    #-- You may obtain a copy of the License at
+    #--
+    #--     https://www.apache.org/licenses/LICENSE-2.0
+    #--
+    #-- Unless required by applicable law or agreed to in writing, software
+    #-- distributed under the License is distributed on an "AS IS" BASIS,
+    #-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    #-- See the License for the specific language governing permissions and
+    #-- limitations under the License.
+
+    WITH AccountsPayable AS (
+      SELECT
+        AccountsPayable.Client_MANDT,
+        AccountsPayable.CompanyCode_BUKRS,
+        AccountsPayable.CompanyText_BUTXT,
+        AccountsPayable.AccountNumberOfVendorOrCreditor_LIFNR,
+        AccountsPayable.NAME1,
+        AccountsPayable.AccountingDocumentNumber_BELNR,
+        AccountsPayable.NumberOfLineItemWithinAccountingDocument_BUZEI,
+        AccountsPayable.PostingDateInTheDocument_BUDAT,
+        AccountsPayable.AccountingDocumenttype_BLART,
+        AccountsPayable.AmountInLocalCurrency_DMBTR,
+        AccountsPayable.AmountInTargetCurrency_DMBTR,
+        AccountsPayable.CurrencyKey_WAERS,
+        AccountsPayable.TargetCurrency_TCURR,
+        AccountsPayable.DocFiscPeriod,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Movement Types.
+            -- Value '101' represents 'GR Goods Receipt' and '501' represents 'Receipt w/o PO'
+            AccountsPayable.AccountType_KOART = 'M' AND AccountsPayable.MovementType__inventoryManagement___BWART IN ('101', '501'),
+            AccountsPayable.POOrderHistory_AmountInLocalCurrency_DMBTR,
+            IF(
+              ## CORTEX-CUSTOMER: Please add relevant Movement Types.
+              -- Value '102' represents 'GR for PO reversal (full or any one of the line item)'
+              -- Value '502' represents 'Return Receipt w/o PO' (Receipt made against movement type 501 document is cancelled.)
+              AccountsPayable.AccountType_KOART = 'M' AND AccountsPayable.MovementType__inventoryManagement___BWART IN ('102', '502'),
+              AccountsPayable.POOrderHistory_AmountInLocalCurrency_DMBTR * -1, 0
+            )
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS TotalPurchasesInSourceCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Movement Types.
+            -- Value '101' represents 'GR Goods Receipt' and '501' represents 'Receipt w/o PO'
+            AccountsPayable.AccountType_KOART = 'M' AND AccountsPayable.MovementType__inventoryManagement___BWART IN ('101', '501'),
+            AccountsPayable.POOrderHistory_AmountInTargetCurrency_DMBTR,
+            IF(
+              ## CORTEX-CUSTOMER: Please add relevant Movement Types.
+              -- Value '102' represents 'GR for PO reversal (full or any one of the line item)'
+              -- Value '502' represents 'Return Receipt w/o PO' (Receipt made against movement type 501 document is cancelled.)
+              AccountsPayable.AccountType_KOART = 'M' AND AccountsPayable.MovementType__inventoryManagement___BWART IN ('102', '502'),
+              AccountsPayable.POOrderHistory_AmountInTargetCurrency_DMBTR * -1, 0
+            )
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS TotalPurchasesInTargetCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE',
+            AccountsPayable.AmountInLocalCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS PeriodAPInSourceCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE',
+            AccountsPayable.AmountInTargetCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS PeriodAPInTargetCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE'
+            -- AND AccountsPayable.PostingDateInTheDocument_BUDAT <= AccountsPayable.DocFiscPeriodEndDate
+            AND AccountsPayable.ClearingDate_AUGDT IS NULL,
+            AccountsPayable.AmountInLocalCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS UnpaidPeriodAPInSourceCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE'
+            -- AND AccountsPayable.PostingDateInTheDocument_BUDAT <= AccountsPayable.DocFiscPeriodEndDate
+            AND AccountsPayable.ClearingDate_AUGDT IS NULL,
+            AccountsPayable.AmountInTargetCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR, AccountsPayable.DocFiscPeriod
+        ) AS UnpaidPeriodAPInTargetCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE'
+            AND AccountsPayable.ClearingDate_AUGDT IS NULL,
+            AccountsPayable.AmountInLocalCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR
+          ORDER BY AccountsPayable.DocFiscPeriod
+        ) AS ClosingAPInSourceCurrency,
+
+        SUM(
+          IF(
+            ## CORTEX-CUSTOMER: Please add relevant Account Type. Value 'K' represents 'Vendor'
+            AccountsPayable.Accounttype_KOART = 'K'
+            ## CORTEX-CUSTOMER: Please add relevant Document Type. Value 'RE' represents 'Invoice - Gross'
+            AND AccountsPayable.InvoiceDocumenttype_BLART = 'RE'
+            AND AccountsPayable.ClearingDate_AUGDT IS NULL,
+            AccountsPayable.AmountInTargetCurrency_DMBTR,
+            0
+          )
+        ) OVER (
+          PARTITION BY AccountsPayable.Client_MANDT, AccountsPayable.CompanyCode_BUKRS, AccountsPayable.TargetCurrency_TCURR
+          ORDER BY AccountsPayable.DocFiscPeriod
+        ) AS ClosingAPInTargetCurrency
+
+      FROM
+        `naitik-poc-test.REPORTING_SAP_V_6_0.AccountsPayable` AS AccountsPayable
+      WHERE
+        AccountsPayable.DocFiscPeriod <= AccountsPayable.KeyFiscPeriod
+    )
+
+    SELECT
+      AccountsPayable.Client_MANDT,
+      AccountsPayable.CompanyCode_BUKRS,
+      AccountsPayable.CompanyText_BUTXT,
+      AccountsPayable.AccountNumberOfVendorOrCreditor_LIFNR,
+      AccountsPayable.NAME1,
+      AccountsPayable.AccountingDocumentNumber_BELNR,
+      AccountsPayable.NumberOfLineItemWithinAccountingDocument_BUZEI,
+      AccountsPayable.PostingDateInTheDocument_BUDAT,
+      AccountsPayable.AccountingDocumenttype_BLART,
+      AccountsPayable.AmountInLocalCurrency_DMBTR,
+      AccountsPayable.AmountInTargetCurrency_DMBTR,
+      AccountsPayable.CurrencyKey_WAERS,
+      AccountsPayable.TargetCurrency_TCURR,
+      AccountsPayable.DocFiscPeriod,
+
+      COALESCE(AccountsPayable.TotalPurchasesInSourceCurrency, 0) AS TotalPurchasesInSourceCurrency,
+      COALESCE(AccountsPayable.TotalPurchasesInTargetCurrency, 0) AS TotalPurchasesInTargetCurrency,
+      COALESCE(AccountsPayable.ClosingAPInSourceCurrency, 0) - COALESCE(UnpaidPeriodAPInSourceCurrency, 0) AS OpeningAPInSourceCurrency,
+      COALESCE(AccountsPayable.ClosingAPInTargetCurrency, 0) - COALESCE(UnpaidPeriodAPInTargetCurrency, 0) AS OpeningAPInTargetCurrency,
+      COALESCE(AccountsPayable.PeriodAPInSourceCurrency, 0) AS PeriodAPInSourceCurrency,
+      COALESCE(AccountsPayable.PeriodAPInTargetCurrency, 0) AS PeriodAPInTargetCurrency,
+      COALESCE(AccountsPayable.ClosingAPInSourceCurrency, 0) - COALESCE(UnpaidPeriodAPInSourceCurrency, 0) + COALESCE(AccountsPayable.PeriodAPInSourceCurrency, 0) AS ClosingAPInSourceCurrency,
+      COALESCE(AccountsPayable.ClosingAPInTargetCurrency, 0) - COALESCE(UnpaidPeriodAPInTargetCurrency, 0) + COALESCE(AccountsPayable.PeriodAPInTargetCurrency, 0) AS ClosingAPInTargetCurrency,
+
+      SAFE_DIVIDE(
+        AccountsPayable.TotalPurchasesInSourceCurrency,
+        (
+          (COALESCE(AccountsPayable.ClosingAPInSourceCurrency, 0) - COALESCE(UnpaidPeriodAPInSourceCurrency, 0) + COALESCE(AccountsPayable.PeriodAPInSourceCurrency, 0)) * 2
+          - COALESCE(AccountsPayable.PeriodAPInSourceCurrency, 0)
+        ) / 2
+      ) AS AccountsPayableTurnoverInSourceCurrency,
+
+      SAFE_DIVIDE(
+        AccountsPayable.TotalPurchasesInTargetCurrency,
+        (
+          (COALESCE(AccountsPayable.ClosingAPInTargetCurrency, 0) - COALESCE(UnpaidPeriodAPInTargetCurrency, 0) + COALESCE(AccountsPayable.PeriodAPInTargetCurrency, 0)) * 2
+          - COALESCE(AccountsPayable.PeriodAPInTargetCurrency, 0)
+        ) / 2
+      ) AS AccountsPayableTurnoverInTargetCurrency
+    FROM AccountsPayable
+    ;
+
+    COMMIT TRANSACTION;
+
+    EXCEPTION WHEN ERROR THEN
+      ROLLBACK TRANSACTION;
+      RAISE USING MESSAGE = @@error.message;
+
+END
