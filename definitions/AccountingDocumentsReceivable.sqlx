@@ -1,0 +1,134 @@
+config {
+  type: "operations",
+  description: "AR Accounting Documents Reporting",
+  dependencies: ["fiscal_date_dim", "AccountingDocuments", "CustomersMD", "CompaniesMD"]
+}
+
+BEGIN
+    BEGIN TRANSACTION;
+
+    TRUNCATE TABLE `naitik-poc-test.REPORTING_SAP_V_6_0.AccountingDocumentsReceivable`;
+
+    INSERT INTO `naitik-poc-test.REPORTING_SAP_V_6_0.AccountingDocumentsReceivable`
+    (
+                `Client_MANDT`,
+        `ExchangeRateType_KURST`,
+        `CompanyCode_BUKRS`,
+        `CompanyText_BUTXT`,
+        `CustomerNumber_KUNNR`,
+        `FiscalYear_GJAHR`,
+        `NAME1_NAME1`,
+        `Company_Country`,
+        `Company_City`,
+        `CountryKey_LAND1`,
+        `City_ORT01`,
+        `AccountingDocumentNumber_BELNR`,
+        `NumberOfLineItemWithinAccountingDocument_BUZEI`,
+        `CurrencyKey_WAERS`,
+        `LocalCurrency_HWAER`,
+        `FiscalyearVariant_PERIV`,
+        `Period`,
+        `Current_Period`,
+        `AccountType_KOART`,
+        `PostingDateInTheDocument_BUDAT`,
+        `DocumentDateInDocument_BLDAT`,
+        `InvoiceToWhichTheTransactionBelongs_REBZG`,
+        `BillingDocument_VBELN`,
+        `WrittenOffAmount_DMBTR`,
+        `BadDebt_DMBTR`,
+        `NetDueDate`,
+        `CashDiscountDate1`,
+        `CashDiscountDate2`,
+        `OpenAndNotDue`,
+        `ClearedAfterDueDate`,
+        `ClearedOnOrBeforeDueDate`,
+        `OpenAndOverDue`,
+        `DoubtfulReceivables`,
+        `DaysInArrear`,
+        `AccountsReceivable`,
+        `Sales`
+    )
+        #-- Copyright 2022 Google LLC
+    #--
+    #-- Licensed under the Apache License, Version 2.0 (the "License");
+    #-- you may not use this file except in compliance with the License.
+    #-- You may obtain a copy of the License at
+    #--
+    #--     https://www.apache.org/licenses/LICENSE-2.0
+    #--
+    #-- Unless required by applicable law or agreed to in writing, software
+    #-- distributed under the License is distributed on an "AS IS" BASIS,
+    #-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    #-- See the License for the specific language governing permissions and
+    #-- limitations under the License.
+
+    SELECT
+      AccountingDocuments.Client_MANDT,
+      AccountingDocuments.ExchangeRateType_KURST,
+      AccountingDocuments.CompanyCode_BUKRS,
+      CompaniesMD.CompanyText_BUTXT,
+      AccountingDocuments.CustomerNumber_KUNNR,
+      AccountingDocuments.FiscalYear_GJAHR,
+      CustomersMD.NAME1_NAME1,
+      CompaniesMD.Country_LAND1 AS Company_Country,
+      CompaniesMD.CityName_ORT01 AS Company_City,
+      CustomersMD.CountryKey_LAND1,
+      CustomersMD.City_ORT01,
+      AccountingDocuments.AccountingDocumentNumber_BELNR,
+      AccountingDocuments.NumberOfLineItemWithinAccountingDocument_BUZEI,
+      AccountingDocuments.CurrencyKey_WAERS,
+      AccountingDocuments.LocalCurrency_HWAER,
+      CompaniesMD.FiscalyearVariant_PERIV,
+      FiscalDateDimension_BUDAT.FiscalYearPeriod AS Period,
+      FiscalDateDimension_CURRENTDATE.FiscalYearPeriod AS Current_Period,
+      AccountingDocuments.AccountType_KOART,
+      AccountingDocuments.PostingDateInTheDocument_BUDAT,
+      AccountingDocuments.DocumentDateInDocument_BLDAT,
+      AccountingDocuments.InvoiceToWhichTheTransactionBelongs_REBZG,
+      AccountingDocuments.BillingDocument_VBELN,
+      AccountingDocuments.WrittenOffAmount_DMBTR,
+      AccountingDocuments.BadDebt_DMBTR,
+      AccountingDocuments.netDueDateCalc AS NetDueDate,
+      AccountingDocuments.sk2dtCalc AS CashDiscountDate1,
+      AccountingDocuments.sk1dtCalc AS CashDiscountDate2,
+      AccountingDocuments.OpenAndNotDue,
+      AccountingDocuments.ClearedAfterDueDate,
+      AccountingDocuments.ClearedOnOrBeforeDueDate,
+      AccountingDocuments.OpenAndOverDue,
+      AccountingDocuments.DoubtfulReceivables,
+      AccountingDocuments.DaysInArrear,
+      AccountingDocuments.AccountsReceivable,
+      AccountingDocuments.Sales
+    FROM
+      `naitik-poc-test.REPORTING_SAP_V_6_0.AccountingDocuments` AS AccountingDocuments
+    LEFT JOIN
+      `naitik-poc-test.REPORTING_SAP_V_6_0.CustomersMD` AS CustomersMD
+      ON
+        AccountingDocuments.Client_MANDT = CustomersMD.Client_MANDT
+        AND AccountingDocuments.CustomerNumber_KUNNR = CustomersMD.CustomerNumber_KUNNR
+    LEFT JOIN
+      `naitik-poc-test.REPORTING_SAP_V_6_0.CompaniesMD` AS CompaniesMD
+      ON
+        AccountingDocuments.Client_MANDT = CompaniesMD.Client_MANDT
+        AND AccountingDocuments.CompanyCode_BUKRS = CompaniesMD.CompanyCode_BUKRS
+    LEFT JOIN
+      `naitik-poc-test.REPORTING_SAP_V_6_0.fiscal_date_dim` AS FiscalDateDimension_BUDAT
+      ON AccountingDocuments.Client_MANDT = FiscalDateDimension_BUDAT.MANDT
+        AND CompaniesMD.FiscalyearVariant_PERIV = FiscalDateDimension_BUDAT.PERIV
+        AND AccountingDocuments.PostingDateInTheDocument_BUDAT = FiscalDateDimension_BUDAT.DATE
+    LEFT JOIN
+      `naitik-poc-test.REPORTING_SAP_V_6_0.fiscal_date_dim` AS FiscalDateDimension_CURRENTDATE
+      ON AccountingDocuments.Client_MANDT = FiscalDateDimension_CURRENTDATE.MANDT
+        AND CompaniesMD.FiscalyearVariant_PERIV = FiscalDateDimension_CURRENTDATE.PERIV
+        AND CURRENT_DATE() = FiscalDateDimension_CURRENTDATE.DATE
+    WHERE
+      AccountingDocuments.AccountType_KOART = 'D'
+    ;
+
+    COMMIT TRANSACTION;
+
+    EXCEPTION WHEN ERROR THEN
+      ROLLBACK TRANSACTION;
+      RAISE USING MESSAGE = @@error.message;
+
+END;

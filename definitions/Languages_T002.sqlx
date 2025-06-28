@@ -1,0 +1,46 @@
+config {
+  type: "operations",
+  description: "AR Accounting Documents Reporting"
+}
+
+BEGIN
+    BEGIN TRANSACTION;
+
+    TRUNCATE TABLE `naitik-poc-test.REPORTING_SAP_V_6_0.Languages_T002`;
+
+    INSERT INTO `naitik-poc-test.REPORTING_SAP_V_6_0.Languages_T002`
+    (
+                `LanguageKey_SPRAS`,
+        `LanguageSpecifications_LASPEZ`,
+        `DegreeOfTranslationOfLanguage_LAHQ`,
+        `TwoCharacterSapLanguageCode_LAISO`
+    )
+        #-- Copyright 2022 Google LLC
+    #--
+    #-- Licensed under the Apache License, Version 2.0 (the "License");
+    #-- you may not use this file except in compliance with the License.
+    #-- You may obtain a copy of the License at
+    #--
+    #--     https://www.apache.org/licenses/LICENSE-2.0
+    #--
+    #-- Unless required by applicable law or agreed to in writing, software
+    #-- distributed under the License is distributed on an "AS IS" BASIS,
+    #-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    #-- See the License for the specific language governing permissions and
+    #-- limitations under the License.
+
+    SELECT
+      T002.SPRAS AS LanguageKey_SPRAS,
+      T002.LASPEZ AS LanguageSpecifications_LASPEZ,
+      T002.LAHQ AS DegreeOfTranslationOfLanguage_LAHQ,
+      T002.LAISO AS TwoCharacterSapLanguageCode_LAISO
+    FROM `naitik-poc-test.CDC_SAP_V_6_0.t002` AS T002
+    ;
+
+    COMMIT TRANSACTION;
+
+    EXCEPTION WHEN ERROR THEN
+      ROLLBACK TRANSACTION;
+      RAISE USING MESSAGE = @@error.message;
+
+END;
